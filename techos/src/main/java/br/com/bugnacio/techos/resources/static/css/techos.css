@@ -110,3 +110,5 @@ a{color:var(--signal-dark)}
   .dados{grid-template-columns:1fr;gap:.1rem}
   .dados dd{margin-bottom:.6rem}
 }
+
+/*  */
