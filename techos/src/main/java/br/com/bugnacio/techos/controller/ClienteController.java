@@ -11,6 +11,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import br.com.bugnacio.techos.model.Cliente;
 import br.com.bugnacio.techos.repository.ClienteRepository;
+import org.springframework.web.bind.annotation.RequestBody;
+
 
 // @Controller: bean do Spring, a recepcao dos pedidos de clientes.
 @Controller
@@ -56,21 +58,24 @@ public class ClienteController {
 
     }
 
-    @PostMapping("/salvar")
-    public String salvar(@ModelAttribute Cliente cliente,
-            RedirectAttributes redirect) {
+   @PostMapping("/salvar")
+    public String salvar(Cliente cliente, RedirectAttributes redirect){
 
-        boolean novo = (cliente.getId() == null);
+        // Verificar se o cliente possui um ID (novo ou existente)
+        if (cliente.getId() == null) {
+            redirect.addFlashAttribute("mensagem", "Cliente cadastrado com sucesso!");
+        } else {
+            redirect.addFlashAttribute("mensagem", "Cliente já existente!");
+            
+        }
 
+        // Salva o cliente no banco de dados
         repo.save(cliente);
 
-        redirect.addFlashAttribute(
-                "mensagem",
-                novo ? "Cliente cadastrado com sucesso!"
-                        : "Cliente atualizado com sucesso!");
-
+        // Redireciona para a lista de clientes após salvar
         return "redirect:/clientes";
     }
+    
 
     @PostMapping("/{id}/excluir")
     public String excluir(@PathVariable Long id,
@@ -96,4 +101,5 @@ public class ClienteController {
         return "clientes/form";
     }
 
+    
 }
