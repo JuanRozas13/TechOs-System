@@ -1,18 +1,19 @@
 package br.com.bugnacio.techos.controller;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import br.com.bugnacio.techos.model.Cliente;
 import br.com.bugnacio.techos.repository.ClienteRepository;
-import org.springframework.web.bind.annotation.RequestBody;
-
+import jakarta.validation.Valid;
 
 // @Controller: bean do Spring, a recepcao dos pedidos de clientes.
 @Controller
@@ -44,6 +45,19 @@ public class ClienteController {
 
     }
 
+    @GetMapping
+    public String listar(
+            @RequestParam(value = "buscar", required = false) String buscar,
+            Model model) {
+        if (buscar != null && !buscar.isBlank()) {
+            model.addAttribute("clientes", repo.findByNomeContainingIgnoreCase(buscar));
+        } else {
+            model.addAttribute("clientes", repo.findAll(Sort.by("nome")));
+        }
+        model.addAttribute("buscar", buscar);
+        return "clientes/lista";
+    }
+
     // GET / CLIENTES/NOVO: MOSTRAR O FORMULARIO PARA CRIAR UM NOVO CLIENTE
     @GetMapping("/novo")
     public String novo(Model model) {
@@ -58,24 +72,40 @@ public class ClienteController {
 
     }
 
-   @PostMapping("/salvar")
-    public String salvar(Cliente cliente, RedirectAttributes redirect){
+    @PostMapping("/salvar")
+    public String salvar(
+            @Valid Cliente cliente,
+            BindingResult result,
+            RedirectAttributes redirect) {
+
+        Boolean jaExiste;
 
         // Verificar se o cliente possui um ID (novo ou existente)
         if (cliente.getId() == null) {
-            redirect.addFlashAttribute("mensagem", "Cliente cadastrado com sucesso!");
+            jaExiste = repo.existsByTelefone(cliente.getTelefone());
         } else {
-            redirect.addFlashAttribute("mensagem", "Cliente já existente!");
-            
+            jaExiste = repo.existsByTelefoneAndIdNot(
+                    cliente.getTelefone(), cliente.getId());
+        }
+
+        if (jaExiste) {
+            result.rejectValue(
+                    "telefone",
+                    "duplicado",
+                    "Já existe um cliente com este telefone.");
+        }
+
+        if (result.hasErrors()) {
+            return "clientes/form";
         }
 
         // Salva o cliente no banco de dados
         repo.save(cliente);
 
-        // Redireciona para a lista de clientes após salvar
+        redirect.addFlashAttribute("mensagem", "Cliente salvo com sucesso!");
+
         return "redirect:/clientes";
     }
-    
 
     @PostMapping("/{id}/excluir")
     public String excluir(@PathVariable Long id,
@@ -101,5 +131,4 @@ public class ClienteController {
         return "clientes/form";
     }
 
-    
 }
