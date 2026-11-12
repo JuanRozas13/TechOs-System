@@ -66,7 +66,7 @@
             <td th:text="${e.tipo}">NOTEBOOK</td>
             <td class="fw-semibold" th:text="${e.marca} + ' ' + ${e.modelo}">Dell Inspiron</td>
             <td class="d-none d-md-table-cell" th:text="${e.numeroSerie}">ABC123</td>
-            <td th:text="${e.cliente.nome}">Maria Souza</td>
+            <td th:text="${e.cliente?.nome}"></td>
             <td class="text-end text-nowrap">
               <a class="btn btn-sm btn-outline-secondary" th:href="@{/equipamentos/{id}/editar(id=${e.id})}">Editar</a>
               <form class="d-inline" method="post" th:action="@{/equipamentos/{id}/excluir(id=${e.id})}"

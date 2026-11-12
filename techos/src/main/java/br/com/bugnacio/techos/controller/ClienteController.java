@@ -1,5 +1,7 @@
 package br.com.bugnacio.techos.controller;
 
+import java.util.Optional;
+
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -15,120 +17,131 @@ import br.com.bugnacio.techos.model.Cliente;
 import br.com.bugnacio.techos.repository.ClienteRepository;
 import jakarta.validation.Valid;
 
-// @Controller: bean do Spring, a recepcao dos pedidos de clientes.
 @Controller
-// @RequestMapping na classe: o comeco do endereco para TODOS os metodos daqui.
 @RequestMapping("/clientes")
 public class ClienteController {
-    // o controller precisa do repository para acessar o banco de dados.
+
     private final ClienteRepository repo;
 
-    // Injeção de dependência: o Spring vai criar um ClienteRepository e passar para
-    // o controller.
     public ClienteController(ClienteRepository repo) {
         this.repo = repo;
     }
 
-    // @GetMapping vazio = o proprio "/clientes".
-    // Endereco completo: http://localhost:8080/clientes
-    @GetMapping
-    public String listar(Model model) {
-
-        // A tela clientes/lista espera uma lista chamada "clientes".
-        // Ainda nao temos banco, entao mandamos uma lista VAZIA (List.of()).
-        // A tela mostra o "estado vazio". Na aula 5 essa lista vem do banco.
-        model.addAttribute("clientes", repo.findAll());
-
-        // SEM @ResponseBody: o texto devolvido e o nome da tela.
-        // Abre: src/main/resources/templates/clientes/lista.html
-        return "clientes/lista";
-
-    }
-
+    // READ: lista (com busca opcional por nome e ordem alfabetica).
     @GetMapping
     public String listar(
-            @RequestParam(value = "buscar", required = false) String buscar,
+            @RequestParam(value = "busca", required = false) String busca,
             Model model) {
-        if (buscar != null && !buscar.isBlank()) {
-            model.addAttribute("clientes", repo.findByNomeContainingIgnoreCase(buscar));
+        if (busca != null && !busca.isBlank()) {
+            model.addAttribute("clientes", repo.findByNomeContainingIgnoreCase(busca));
         } else {
             model.addAttribute("clientes", repo.findAll(Sort.by("nome")));
         }
-        model.addAttribute("buscar", buscar);
+        model.addAttribute("busca", busca);
         return "clientes/lista";
     }
 
-    // GET / CLIENTES/NOVO: MOSTRAR O FORMULARIO PARA CRIAR UM NOVO CLIENTE
+    // CREATE (1/2): formulario vazi
     @GetMapping("/novo")
     public String novo(Model model) {
-        // A tela clientes/form espera um objeto chamado "cliente".
-        // Mandamos um cliente VAZIO (new Cliente()).
-        // A tela mostra o "estado vazio". Na aula 5 esse cliente vem do banco.
         model.addAttribute("cliente", new Cliente());
-
-        // SEM @ResponseBody: o texto devolvido e o nome da tela.
-        // Abre: src/main/resources/templates/clientes/form.html
         return "clientes/form";
-
     }
 
+    // CREATE (2/2) e UPDATE
+    // Recebe os dados enviados pelo formulário, valida e salva no banco.
     @PostMapping("/salvar")
     public String salvar(
             @Valid Cliente cliente,
             BindingResult result,
             RedirectAttributes redirect) {
 
-        Boolean jaExiste;
+        // Verifica se é um cadastro novo.
+        // Se o ID for null, significa que ainda não existe registro no banco.
+        boolean novoCadastro = cliente.getId() == null;
 
-        // Verificar se o cliente possui um ID (novo ou existente)
-        if (cliente.getId() == null) {
+        // Verifica se o telefone informado já está sendo utilizado.
+        boolean jaExiste;
+
+        if (novoCadastro) {
+
+            // Cadastro novo:
+            // Verifica se já existe algum cliente com esse telefone.
             jaExiste = repo.existsByTelefone(cliente.getTelefone());
+
         } else {
+
+            // Atualização:
+            // Verifica se outro cliente utiliza esse telefone.
+            // O próprio cliente que está sendo editado é desconsiderado pelo ID.
             jaExiste = repo.existsByTelefoneAndIdNot(
-                    cliente.getTelefone(), cliente.getId());
+                    cliente.getTelefone(),
+                    cliente.getId());
         }
 
+        // Se o telefone já estiver cadastrado,
+        // adiciona uma mensagem de erro no campo telefone.
         if (jaExiste) {
             result.rejectValue(
                     "telefone",
                     "duplicado",
-                    "Já existe um cliente com este telefone.");
+                    "Já existe um cliente com esse telefone.");
         }
 
+        // Verifica se ocorreu algum erro de validação.
+        // Pode ser um campo obrigatório vazio, e-mail inválido
+        // ou telefone duplicado, por exemplo.
         if (result.hasErrors()) {
+
+            // Retorna ao formulário para o usuário corrigir os dados.
+            // Não salva e não redireciona para outra página.
             return "clientes/form";
         }
 
-        // Salva o cliente no banco de dados
+        // Se chegou até aqui, significa que os dados estão válidos.
+        // O Spring Data JPA identifica se deve inserir ou atualizar
+        // conforme o ID recebido.
         repo.save(cliente);
 
-        redirect.addFlashAttribute("mensagem", "Cliente salvo com sucesso!");
+        // Define a mensagem de acordo com a operação realizada.
+        if (novoCadastro) {
 
+            // Mensagem exibida quando um novo cliente é cadastrado.
+            redirect.addFlashAttribute(
+                    "mensagem",
+                    "Cliente cadastrado com sucesso!");
+
+        } else {
+
+            // Mensagem exibida quando um cliente existente é atualizado.
+            redirect.addFlashAttribute(
+                    "mensagem",
+                    "Cliente atualizado com sucesso!");
+        }
+
+        // Redireciona para a listagem de clientes.
         return "redirect:/clientes";
     }
 
-    @PostMapping("/{id}/excluir")
-    public String excluir(@PathVariable Long id,
-            RedirectAttributes attributes) {
-        repo.deleteById(id);
-        attributes.addFlashAttribute(
-                "mensagem",
-                "Cliente excluído com sucesso!");
-        return "redirect:/clientes";
-    }
-
-    // Abre a tela de edição de um cliente específico
+    // UPDATE (1/2): formulario preenchido.
     @GetMapping("/{id}/editar")
-    public String editar(@PathVariable Long id, Model model) {
-
-        // Procura o cliente pelo ID no banco
-        Cliente cliente = repo.findById(id).orElseThrow();
-
-        // Envia o cliente encontrado para o formulário
-        model.addAttribute("cliente", cliente);
-
-        // Abre o mesmo formulário usado para cadastrar
+    public String editar(@PathVariable("id") Long id,
+            Model model, RedirectAttributes redirect) {
+        Optional<Cliente> cliente = repo.findById(id);
+        if (cliente.isEmpty()) {
+            redirect.addFlashAttribute("erro", "Cliente não encontrado.");
+            return "redirect:/clientes";
+        }
+        model.addAttribute("cliente", cliente.get());
         return "clientes/form";
     }
 
+    // DELETE.
+    @PostMapping("/{id}/excluir")
+    public String excluir(@PathVariable("id") Long id, RedirectAttributes redirect) {
+        repo.deleteById(id);
+        redirect.addFlashAttribute("mensagem", "Cliente excluído.");
+        return "redirect:/clientes";
+    }
 }
+
