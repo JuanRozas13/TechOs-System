@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.GetMapping;
  
 // Importa o repositório de clientes
 import br.com.bugnacio.techos.repository.ClienteRepository;
+
+import br.com.bugnacio.techos.repository.EquipamentoRepository;
+
  
 // Indica que esta classe é um Controller
 @Controller
@@ -18,25 +21,33 @@ public class HomeController {
  
     // Variável que permitirá acessar os clientes do banco de dados
     private final ClienteRepository clienteRepository;
+    private final EquipamentoRepository equipamentoRepository;
  
     // Construtor da classe
     // O Spring injeta automaticamente o ClienteRepository aqui
-    public HomeController(ClienteRepository clienteRepository) {
+    public HomeController(
+        ClienteRepository clienteRepository,
+        EquipamentoRepository equipamentoRepository
+    ) {
         this.clienteRepository = clienteRepository;
+        this.equipamentoRepository = equipamentoRepository;
     }
  
     // Quando alguém acessar a rota "/"
     @GetMapping("/")
     public String inicio(Model model) {
- 
-        // Conta quantos clientes existem cadastrados no banco
+        
+        // Conta os clientes cadastrados
         long totalClientes = clienteRepository.count();
- 
+
+        // Conta os equipamentos cadastrados
+        long totalEquipamentos = equipamentoRepository.count();
+       
         // Envia o total de clientes para a página dashboard
         model.addAttribute("totalClientes", totalClientes);
  
         // Envia o total de equipamentos para a página dashboard
-        model.addAttribute("totalEquipamentos", 10);
+        model.addAttribute("totalEquipamentos", totalEquipamentos);
  
         // Envia a quantidade de ordens de serviço abertas
         model.addAttribute("osAbertas", 3);
