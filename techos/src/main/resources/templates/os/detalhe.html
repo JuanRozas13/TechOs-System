@@ -39,7 +39,7 @@
   <div class="page-head">
     <div class="d-flex align-items-center gap-3 flex-wrap">
       <h1 class="h3" th:text="'Ordem de serviço #' + ${os.id}">Ordem de serviço #1</h1>
-      <span class="badge-status" th:classappend="\'st-\' + ${os.status.name()}" th:text="${os.status.descricao}">Recebido</span>
+      <span class="badge-status" th:classappend="'st-' + ${os.status.name()}" th:text="${os.status.descricao}">Recebido</span>
     </div>
     <a class="btn btn-outline-secondary" th:href="@{/os}">Voltar para a lista</a>
   </div>
@@ -63,8 +63,8 @@
         <div class="panel-body">
           <h2 class="h6 mb-3">Dados do atendimento</h2>
           <dl class="dados">
-            <dt>Cliente</dt><dd th:text="${os.equipamento.cliente.nome}">Maria Souza</dd>
-            <dt>Telefone</dt><dd th:text="${os.equipamento.cliente.telefone}">(11) 99999-0000</dd>
+            <dt>Cliente</dt><dd th:text="${os.equipamento.cliente?.nome}">Maria Souza</dd>
+            <dt>Telefone</dt><dd th:text="${os.equipamento.cliente?.telefone}">(11) 99999-0000</dd>
             <dt>Equipamento</dt>
             <dd th:text="${os.equipamento.tipo} + ' ' + ${os.equipamento.marca} + ' ' + ${os.equipamento.modelo}">NOTEBOOK Dell Inspiron</dd>
             <dt>Nº de série</dt><dd th:text="${os.equipamento.numeroSerie}">ABC123</dd>
@@ -96,12 +96,12 @@
           <h2 class="h6 mb-3">Diagnóstico e valor</h2>
           <div class="mb-3">
             <label class="form-label" for="diagnostico">Diagnóstico</label>
-            <textarea id="diagnostico" name="diagnostico" rows="3" class="form-control"
+            <textarea id="diagnostico" name="diagnostico" rows="3" maxlength="1000" class="form-control"
                       th:text="${os.diagnostico}"></textarea>
           </div>
           <div class="mb-3" style="max-width:220px">
             <label class="form-label" for="valor">Valor (R$)</label>
-            <input type="number" id="valor" name="valor" step="0.01" min="0" class="form-control"
+            <input type="number" id="valor" name="valor" step="0.01" min="0" max="99999999.99" class="form-control"
                    th:value="${os.valor}">
           </div>
           <button class="btn btn-primary" type="submit">Salvar diagnóstico</button>

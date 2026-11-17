@@ -1,6 +1,5 @@
 package br.com.bugnacio.techos.controller;
 
-import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Sort;
@@ -8,7 +7,6 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,6 +18,7 @@ import br.com.bugnacio.techos.model.Equipamento;
 import br.com.bugnacio.techos.model.TipoEquipmento;
 import br.com.bugnacio.techos.repository.ClienteRepository;
 import br.com.bugnacio.techos.repository.EquipamentoRepository;
+import br.com.bugnacio.techos.repository.OrdemServicoRepository;
 import jakarta.validation.Valid;
 
 @Controller
@@ -28,22 +27,23 @@ public class EquipamentoController {
 
     private final EquipamentoRepository repo;
     private final ClienteRepository clienteRepo;
+    private final OrdemServicoRepository osRepo;
 
-    public EquipamentoController(EquipamentoRepository repo, ClienteRepository clienteRepo) {
+    public EquipamentoController(
+            EquipamentoRepository repo,
+            ClienteRepository clienteRepo,
+            OrdemServicoRepository osRepo) {
         this.repo = repo;
         this.clienteRepo = clienteRepo;
+        this.osRepo = osRepo;
     }
 
-    // Disponibiliza as listas do formulario (select de cliente e de tipo)
-    // em todas as telas deste controller.
-    @ModelAttribute("clientes")
-    public List<Cliente> clientes() {
-        return clienteRepo.findAll(Sort.by("nome"));
-    }
-
-    @ModelAttribute("tipos")
-    public TipoEquipmento[] tipos() {
-        return TipoEquipmento.values();
+    // Envia para o formulario as listas dos selects (cliente e tipo).
+    // Só é chamado onde o formulario aparece, assim a lista de equipamentos não
+    // precisa buscar todos os clientes à toa.
+    private void prepararFormulario(Model model) {
+        model.addAttribute("clientes", clienteRepo.findAll(Sort.by("nome")));
+        model.addAttribute("tipos", TipoEquipmento.values());
     }
 
     // READ: lista (com busca opcional por marca ou modelo).
@@ -52,8 +52,9 @@ public class EquipamentoController {
             @RequestParam(value = "busca", required = false) String busca,
             Model model) {
         if (busca != null && !busca.isBlank()) {
+            String termo = busca.trim();
             model.addAttribute("equipamentos",
-                    repo.findByMarcaContainingIgnoreCaseOrModeloContainingIgnoreCase(busca, busca));
+                    repo.findByMarcaContainingIgnoreCaseOrModeloContainingIgnoreCase(termo, termo));
         } else {
             model.addAttribute("equipamentos", repo.findAll(Sort.by("marca")));
         }
@@ -65,8 +66,9 @@ public class EquipamentoController {
     @GetMapping("/novo")
     public String novo(Model model) {
         Equipamento equipamento = new Equipamento();
-        equipamento.setCliente(new Cliente()); // evita erro de null no th:field="*{cliente.id}"
+        equipamento.setCliente(new Cliente()); // evita erro de null no formulario
         model.addAttribute("equipamento", equipamento);
+        prepararFormulario(model);
         return "equipamentos/form";
     }
 
@@ -75,20 +77,27 @@ public class EquipamentoController {
     public String salvar(
             @Valid Equipamento equipamento,
             BindingResult result,
+            Model model,
             RedirectAttributes redirect) {
 
         boolean novoCadastro = equipamento.getId() == null;
 
-        // Se nenhum cliente foi escolhido, o formulario envia um Cliente sem id.
-        // Transforma em null para nao dar erro ao salvar.
-        if (equipamento.getCliente() != null && equipamento.getCliente().getId() == null) {
-            equipamento.setCliente(null);
+        // O select envia "cliente.id" vazio quando nenhum cliente foi escolhido.
+        // Aqui buscamos o cliente REAL no banco: assim garantimos que ele existe
+        // e ignoramos qualquer outro dado de cliente que viesse junto no formulario.
+        Long clienteId = (equipamento.getCliente() != null) ? equipamento.getCliente().getId() : null;
+        Cliente cliente = (clienteId != null) ? clienteRepo.findById(clienteId).orElse(null) : null;
+
+        if (cliente == null) {
+            // Equipamento sem dono quebraria as telas de OS, por isso o cliente é obrigatorio.
+            result.rejectValue("cliente", "obrigatorio", "Escolha o cliente dono do equipamento.");
+            equipamento.setCliente(new Cliente()); // mantem o formulario funcionando
+        } else {
+            equipamento.setCliente(cliente);
         }
 
         if (result.hasErrors()) {
-            if (equipamento.getCliente() == null) {
-                equipamento.setCliente(new Cliente());
-            }
+            prepararFormulario(model);
             return "equipamentos/form";
         }
 
@@ -113,12 +122,20 @@ public class EquipamentoController {
             e.setCliente(new Cliente());
         }
         model.addAttribute("equipamento", e);
+        prepararFormulario(model);
         return "equipamentos/form";
     }
 
     // DELETE.
+    // Equipamento que já tem ordem de serviço não pode ser excluído (o histórico seria perdido).
     @PostMapping("/{id}/excluir")
     public String excluir(@PathVariable("id") Long id, RedirectAttributes redirect) {
+        if (osRepo.existsByEquipamentoId(id)) {
+            redirect.addFlashAttribute("erro",
+                    "Não é possível excluir: este equipamento tem ordens de serviço.");
+            return "redirect:/equipamentos";
+        }
+
         repo.deleteById(id);
         redirect.addFlashAttribute("mensagem", "Equipamento excluído.");
         return "redirect:/equipamentos";

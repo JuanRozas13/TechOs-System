@@ -45,16 +45,20 @@
 
       <div class="mb-3">
         <label class="form-label" for="equipamento">Equipamento</label>
-        <select id="equipamento" name="equipamento.id" class="form-select" required>
+        <!-- name="equipamento.id": o Spring monta o Equipamento só com o id -->
+        <select id="equipamento" name="equipamento.id" class="form-select"
+                th:classappend="${#fields.hasErrors('equipamento')} ? 'is-invalid'" required>
           <option value="">Escolha o equipamento</option>
           <option th:each="e : ${equipamentos}" th:value="${e.id}"
-                  th:text="${e.tipo} + ' ' + ${e.marca} + ' ' + ${e.modelo} + ' — ' + ${e.cliente.nome}">NOTEBOOK Dell Inspiron — Maria</option>
+                  th:selected="${ordemServico.equipamento != null and ordemServico.equipamento.id == e.id}"
+                  th:text="${e.tipo} + ' ' + ${e.marca} + ' ' + ${e.modelo} + ' — ' + (${e.cliente?.nome} ?: 'sem cliente')">NOTEBOOK Dell Inspiron — Maria</option>
         </select>
+        <div class="invalid-feedback" th:errors="*{equipamento}">Escolha o equipamento.</div>
       </div>
 
       <div class="mb-4">
         <label class="form-label" for="defeito">Defeito relatado</label>
-        <textarea id="defeito" rows="4" class="form-control" th:field="*{defeito}" th:errorclass="is-invalid"
+        <textarea id="defeito" rows="4" maxlength="500" class="form-control" th:field="*{defeito}" th:errorclass="is-invalid"
                   placeholder="O que o cliente disse que está acontecendo?"></textarea>
         <div class="invalid-feedback" th:errors="*{defeito}">Descreva o defeito.</div>
         <div class="form-text">A data de entrada e o status inicial (Recebido) são preenchidos automaticamente.</div>

@@ -15,6 +15,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import br.com.bugnacio.techos.model.Cliente;
 import br.com.bugnacio.techos.repository.ClienteRepository;
+import br.com.bugnacio.techos.repository.EquipamentoRepository;
 import jakarta.validation.Valid;
 
 @Controller
@@ -22,9 +23,11 @@ import jakarta.validation.Valid;
 public class ClienteController {
 
     private final ClienteRepository repo;
+    private final EquipamentoRepository equipamentoRepo;
 
-    public ClienteController(ClienteRepository repo) {
+    public ClienteController(ClienteRepository repo, EquipamentoRepository equipamentoRepo) {
         this.repo = repo;
+        this.equipamentoRepo = equipamentoRepo;
     }
 
     // READ: lista (com busca opcional por nome e ordem alfabetica).
@@ -33,7 +36,7 @@ public class ClienteController {
             @RequestParam(value = "busca", required = false) String busca,
             Model model) {
         if (busca != null && !busca.isBlank()) {
-            model.addAttribute("clientes", repo.findByNomeContainingIgnoreCase(busca));
+            model.addAttribute("clientes", repo.findByNomeContainingIgnoreCaseOrderByNomeAsc(busca.trim()));
         } else {
             model.addAttribute("clientes", repo.findAll(Sort.by("nome")));
         }
@@ -41,7 +44,7 @@ public class ClienteController {
         return "clientes/lista";
     }
 
-    // CREATE (1/2): formulario vazi
+    // CREATE (1/2): formulario vazio.
     @GetMapping("/novo")
     public String novo(Model model) {
         model.addAttribute("cliente", new Cliente());
@@ -56,70 +59,41 @@ public class ClienteController {
             BindingResult result,
             RedirectAttributes redirect) {
 
-        // Verifica se é um cadastro novo.
         // Se o ID for null, significa que ainda não existe registro no banco.
         boolean novoCadastro = cliente.getId() == null;
 
-        // Verifica se o telefone informado já está sendo utilizado.
-        boolean jaExiste;
+        // Só confere telefone repetido se o telefone passou na validação básica
+        // (se estiver vazio, a mensagem "Informe o telefone" já resolve).
+        if (!result.hasFieldErrors("telefone")) {
 
-        if (novoCadastro) {
+            // Cadastro novo: existe algum cliente com esse telefone?
+            // Edição: existe OUTRO cliente com esse telefone? (o próprio é desconsiderado pelo ID)
+            boolean jaExiste = novoCadastro
+                    ? repo.existsByTelefone(cliente.getTelefone())
+                    : repo.existsByTelefoneAndIdNot(cliente.getTelefone(), cliente.getId());
 
-            // Cadastro novo:
-            // Verifica se já existe algum cliente com esse telefone.
-            jaExiste = repo.existsByTelefone(cliente.getTelefone());
-
-        } else {
-
-            // Atualização:
-            // Verifica se outro cliente utiliza esse telefone.
-            // O próprio cliente que está sendo editado é desconsiderado pelo ID.
-            jaExiste = repo.existsByTelefoneAndIdNot(
-                    cliente.getTelefone(),
-                    cliente.getId());
+            // Se o telefone já estiver cadastrado, mostra o erro embaixo do campo telefone.
+            if (jaExiste) {
+                result.rejectValue(
+                        "telefone",
+                        "duplicado",
+                        "Já existe um cliente com esse telefone.");
+            }
         }
 
-        // Se o telefone já estiver cadastrado,
-        // adiciona uma mensagem de erro no campo telefone.
-        if (jaExiste) {
-            result.rejectValue(
-                    "telefone",
-                    "duplicado",
-                    "Já existe um cliente com esse telefone.");
-        }
-
-        // Verifica se ocorreu algum erro de validação.
-        // Pode ser um campo obrigatório vazio, e-mail inválido
-        // ou telefone duplicado, por exemplo.
+        // Houve erro (campo vazio, e-mail inválido, telefone duplicado...)?
+        // Volta para o formulário sem salvar e sem redirecionar.
         if (result.hasErrors()) {
-
-            // Retorna ao formulário para o usuário corrigir os dados.
-            // Não salva e não redireciona para outra página.
             return "clientes/form";
         }
 
-        // Se chegou até aqui, significa que os dados estão válidos.
-        // O Spring Data JPA identifica se deve inserir ou atualizar
-        // conforme o ID recebido.
+        // Dados válidos: o Spring Data JPA decide entre inserir ou atualizar conforme o ID.
         repo.save(cliente);
 
-        // Define a mensagem de acordo com a operação realizada.
-        if (novoCadastro) {
+        redirect.addFlashAttribute(
+                "mensagem",
+                novoCadastro ? "Cliente cadastrado com sucesso!" : "Cliente atualizado com sucesso!");
 
-            // Mensagem exibida quando um novo cliente é cadastrado.
-            redirect.addFlashAttribute(
-                    "mensagem",
-                    "Cliente cadastrado com sucesso!");
-
-        } else {
-
-            // Mensagem exibida quando um cliente existente é atualizado.
-            redirect.addFlashAttribute(
-                    "mensagem",
-                    "Cliente atualizado com sucesso!");
-        }
-
-        // Redireciona para a listagem de clientes.
         return "redirect:/clientes";
     }
 
@@ -137,11 +111,18 @@ public class ClienteController {
     }
 
     // DELETE.
+    // Cliente com equipamentos não pode ser excluído: o banco recusaria (chave estrangeira)
+    // e o usuário veria uma página de erro. Por isso avisamos antes, com uma mensagem clara.
     @PostMapping("/{id}/excluir")
     public String excluir(@PathVariable("id") Long id, RedirectAttributes redirect) {
+        if (equipamentoRepo.existsByClienteId(id)) {
+            redirect.addFlashAttribute("erro",
+                    "Não é possível excluir: este cliente tem equipamentos cadastrados.");
+            return "redirect:/clientes";
+        }
+
         repo.deleteById(id);
         redirect.addFlashAttribute("mensagem", "Cliente excluído.");
         return "redirect:/clientes";
     }
 }
-

@@ -78,10 +78,10 @@
           <tr th:each="o : ${ordens}">
             <td class="fw-semibold" th:text="'#' + ${o.id}">#1</td>
             <td class="d-none d-md-table-cell" th:text="${#temporals.format(o.dataEntrada, 'dd/MM/yyyy')}">01/01/2026</td>
-            <td th:text="${o.equipamento.cliente.nome}">Maria Souza</td>
+            <td th:text="${o.equipamento.cliente?.nome}">Maria Souza</td>
             <td class="d-none d-lg-table-cell" th:text="${o.equipamento.marca} + ' ' + ${o.equipamento.modelo}">Dell Inspiron</td>
             <td class="d-none d-lg-table-cell text-truncate" style="max-width:220px" th:text="${o.defeito}">Não liga</td>
-            <td><span class="badge-status" th:classappend="\'st-\' + ${o.status.name()}" th:text="${o.status.descricao}">Recebido</span></td>
+            <td><span class="badge-status" th:classappend="'st-' + ${o.status.name()}" th:text="${o.status.descricao}">Recebido</span></td>
             <td class="text-end" th:text="${o.valor != null} ? 'R$ ' + ${#numbers.formatDecimal(o.valor, 1, 'POINT', 2, 'COMMA')} : '—'">R$ 0,00</td>
             <td class="text-end"><a class="btn btn-sm btn-outline-secondary" th:href="@{/os/{id}(id=${o.id})}">Abrir</a></td>
           </tr>
